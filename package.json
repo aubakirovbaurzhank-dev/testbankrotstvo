@@ -7,7 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "verify:finance": "node --experimental-strip-types scripts/verify-finance.ts"
   },
   "dependencies": {
     "@google/genai": "^1.0.0",
