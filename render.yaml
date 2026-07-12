@@ -1,0 +1,17 @@
+# Render Blueprint — деплой в один клик.
+# Render → New → Blueprint → подключить репозиторий → задать GEMINI_API_KEY.
+# Node-сервер (не serverless), поэтому распознавание отчёта (20–40 сек) не обрывается по таймауту.
+services:
+  - type: web
+    name: credit-analyzer
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false        # ключ вводится в дашборде Render, в коде его нет
+      - key: SEED_DEMO
+        value: "true"      # показать проверяющим наполненный дашборд
+      - key: NODE_VERSION
+        value: "22"
