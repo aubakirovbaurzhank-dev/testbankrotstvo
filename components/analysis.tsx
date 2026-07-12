@@ -65,20 +65,31 @@ export function ScenarioCards({ a }: { a: FinanceAnalysis }) {
 
 function ScenarioCard({ s, recommended }: { s: Scenario; recommended: boolean }) {
   const Icon = SCENARIO_ICON[s.key];
+  // Если выгоднее «продолжать платить» — это не «Рекомендуем услугу», а честное «выгоднее всего».
+  const continueBest = recommended && s.key === "continue";
   return (
     <div
       className={cn(
         "relative flex flex-col rounded-2xl border p-5 shadow-soft transition-shadow hover:shadow-lift",
-        recommended ? "border-brand-300 bg-brand-50/40 ring-1 ring-brand-200" : "border-ink-200 bg-white",
+        recommended
+          ? continueBest
+            ? "border-emerald-300 bg-emerald-50/40 ring-1 ring-emerald-200"
+            : "border-brand-300 bg-brand-50/40 ring-1 ring-brand-200"
+          : "border-ink-200 bg-white",
       )}
     >
       {recommended && (
-        <span className="absolute -top-2.5 left-5 chip border-brand-300 bg-brand-600 text-white">
-          <Star className="h-3 w-3" /> Рекомендуем
+        <span
+          className={cn(
+            "absolute -top-2.5 left-5 chip",
+            continueBest ? "border-emerald-300 bg-emerald-600 text-white" : "border-brand-300 bg-brand-600 text-white",
+          )}
+        >
+          <Star className="h-3 w-3" /> {continueBest ? "Выгоднее всего" : "Рекомендуем"}
         </span>
       )}
       <div className="flex items-center gap-2.5">
-        <div className={cn("grid h-9 w-9 place-items-center rounded-xl", recommended ? "bg-brand-600 text-white" : "bg-ink-100 text-ink-500")}>
+        <div className={cn("grid h-9 w-9 place-items-center rounded-xl", recommended ? (continueBest ? "bg-emerald-600 text-white" : "bg-brand-600 text-white") : "bg-ink-100 text-ink-500")}>
           <Icon className="h-5 w-5" />
         </div>
         <div>

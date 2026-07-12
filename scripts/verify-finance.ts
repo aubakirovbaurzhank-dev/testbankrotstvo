@@ -131,5 +131,28 @@ console.log("\n── Кейс F: compliance (0–2 платежа, кредит
   check("риск-скор > 0 и <= 100", a.compliance_score > 0 && a.compliance_score <= 100, `${a.compliance_score}`);
 }
 
+console.log("\n── Кейс G: рекомендация с учётом существенности + МФЦ ──");
+{
+  // Небольшой долг: платное банкротство не выгоднее → рекомендуем «продолжать платить».
+  const small = analyzeFinance(report([
+    makeContract({ current_debt: 154000, psk_percent: 20, avg_monthly_payment: 8000 }),
+  ]));
+  check("малый долг: рекомендация = continue", small.best_scenario === "continue", `got ${small.best_scenario}`);
+  check("малый долг: mfc_eligible = true", small.mfc_eligible === true);
+
+  // Крупный долг: банкротство даёт существенную экономию → рекомендуем его.
+  const big = analyzeFinance(report([
+    makeContract({ current_debt: 900000, psk_percent: 40, avg_monthly_payment: 35000 }),
+  ]));
+  check("крупный долг: рекомендация = bankruptcy", big.best_scenario === "bankruptcy", `got ${big.best_scenario}`);
+  check("крупный долг: mfc_eligible = true", big.mfc_eligible === true);
+
+  // Долг вне лимита МФЦ.
+  const huge = analyzeFinance(report([
+    makeContract({ current_debt: 1500000, psk_percent: 30, avg_monthly_payment: 40000 }),
+  ]));
+  check("долг > 1 млн: mfc_eligible = false", huge.mfc_eligible === false);
+}
+
 console.log(`\n${fails === 0 ? "🎉 ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ" : "⚠ ПРОВАЛЕНО: " + fails}\n`);
 process.exit(fails === 0 ? 0 : 1);

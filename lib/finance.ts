@@ -185,6 +185,9 @@ export function analyzeFinance(report: ExtractedReport): FinanceAnalysis {
   const totalLoanSum = report.contracts.reduce((s, c) => s + (c.loan_sum || 0), 0);
   const paid = paidBreakdown(report);
 
+  // Бесплатное внесудебное банкротство через МФЦ доступно при долге 25 000–1 000 000 ₽.
+  const mfcEligible = totalDebt >= 25_000 && totalDebt <= 1_000_000;
+
   // Сценарий A — продолжать платить банкам.
   let monthlyTotal = 0;
   let durationMax = 0;
@@ -226,7 +229,9 @@ export function analyzeFinance(report: ExtractedReport): FinanceAnalysis {
     total_pay: BANKRUPTCY_COST,
     service_cost: BANKRUPTCY_COST,
     savings_vs_continue: continueTotal - BANKRUPTCY_COST,
-    note: `Долг ${Math.round(totalDebt).toLocaleString("ru-RU")} ₽ списывается. Клиент платит только за процедуру — фиксированные ${BANKRUPTCY_COST.toLocaleString("ru-RU")} ₽ (возможна рассрочка).`,
+    note:
+      `Долг ${Math.round(totalDebt).toLocaleString("ru-RU")} ₽ списывается. Клиент платит только за процедуру — фиксированные ${BANKRUPTCY_COST.toLocaleString("ru-RU")} ₽ (возможна рассрочка).` +
+      (mfcEligible ? " Долг в лимите 25 000–1 000 000 ₽ — доступно и бесплатное банкротство через МФЦ." : ""),
   };
 
   // Сценарий C — реструктуризация (РДГ): проценты замораживаются, платим тело + услугу.
@@ -245,14 +250,21 @@ export function analyzeFinance(report: ExtractedReport): FinanceAnalysis {
 
   const scenarios = [continueScenario, bankruptcyScenario, restructScenario];
 
-  // Лучший сценарий — максимальная экономия для клиента.
-  let best: Scenario = bankruptcyScenario;
-  for (const s of scenarios) if (s.savings_vs_continue > best.savings_vs_continue) best = s;
+  // Платную услугу рекомендуем только при СУЩЕСТВЕННОЙ экономии: минимум 50 000 ₽
+  // и не меньше 25% от «продолжать платить». Иначе платить за процедуру больше,
+  // чем сам долг, невыгодно — честно оставляем базовый вариант (и МФЦ, если подходит).
+  const materialThreshold = Math.max(50_000, 0.25 * continueTotal);
+  let best: Scenario = continueScenario;
+  for (const s of [bankruptcyScenario, restructScenario]) {
+    if (s.savings_vs_continue >= materialThreshold && s.savings_vs_continue > best.savings_vs_continue) {
+      best = s;
+    }
+  }
   best.recommended = true;
 
   const { flags, score } = buildCompliance(report);
 
-  const headline = buildHeadline(report, paid, continueScenario, best);
+  const headline = buildHeadline(report, paid, continueScenario, best, mfcEligible);
 
   return {
     total_current_debt: totalDebt,
@@ -261,6 +273,7 @@ export function analyzeFinance(report: ExtractedReport): FinanceAnalysis {
     paid,
     scenarios,
     best_scenario: best.key,
+    mfc_eligible: mfcEligible,
     compliance: flags,
     compliance_score: score,
     headline,
@@ -272,13 +285,19 @@ function buildHeadline(
   paid: PaidBreakdown,
   cont: Scenario,
   best: Scenario,
+  mfcEligible: boolean,
 ): string {
   const name = report.borrower_name?.split(" ")[0] || "Клиент";
+  // Есть существенно выгодная платная услуга.
   if (best.key !== "continue" && best.savings_vs_continue > 0) {
     return `${name} может сэкономить до ${Math.round(best.savings_vs_continue).toLocaleString("ru-RU")} ₽ — вариант «${best.title}» выгоднее, чем продолжать платить банкам.`;
+  }
+  // Платные услуги не дают ощутимой выгоды (долг небольшой относительно их стоимости).
+  if (mfcEligible) {
+    return `Долг небольшой — платить за процедуру дороже, чем сам долг. Если у клиента есть доход, выгоднее продолжать платить; если платить не может — подходит бесплатное банкротство через МФЦ.`;
   }
   if (paid.interest_share > 0.5) {
     return `Больше половины всех платежей клиента (${Math.round(paid.interest_share * 100)}%) ушло в проценты, а не в погашение долга.`;
   }
-  return `Итоговая переплата по текущему графику — ${Math.round(cont.interest_pay || 0).toLocaleString("ru-RU")} ₽ процентов.`;
+  return `Платные услуги здесь не дают экономии — выгоднее продолжать платить по текущему графику.`;
 }

@@ -111,7 +111,7 @@ export default async function ApplicationPage({ params }: { params: Promise<{ id
               intro={`Я помогу по заявке **${report.borrower_name.split(" ")[0]}**. Спросите про сценарии, риски или как объяснить выгоду клиенту.`}
               suggestions={[
                 "Что предложить этому клиенту?",
-                "Почему банкротство выгоднее?",
+                "Какой вариант выгоднее и почему?",
                 "На что обратить внимание в compliance?",
               ]}
             />

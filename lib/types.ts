@@ -72,6 +72,7 @@ export interface FinanceAnalysis {
   paid: PaidBreakdown;
   scenarios: Scenario[];       // [continue, bankruptcy, restructuring]
   best_scenario: Scenario["key"];
+  mfc_eligible: boolean;       // подходит ли под бесплатное банкротство через МФЦ
   compliance: ComplianceFlag[];
   compliance_score: number;    // 0..100, чем выше — тем рискованнее профиль
   headline: string;            // Короткий вывод-«крючок» для менеджера
