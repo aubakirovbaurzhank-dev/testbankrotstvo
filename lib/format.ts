@@ -9,10 +9,11 @@ export function rub(n: number, opts: { sign?: boolean } = {}): string {
 
 /** Компактный формат для крупных сумм: 1,2 млн ₽ */
 export function rubShort(n: number): string {
+  const neg = (n || 0) < 0 ? "−" : "";
   const v = Math.abs(Math.round(n || 0));
-  if (v >= 1_000_000) return `${(v / 1_000_000).toLocaleString("ru-RU", { maximumFractionDigits: 1 })} млн ₽`;
-  if (v >= 1_000) return `${Math.round(v / 1000).toLocaleString("ru-RU")} тыс ₽`;
-  return `${v} ₽`;
+  if (v >= 1_000_000) return `${neg}${(v / 1_000_000).toLocaleString("ru-RU", { maximumFractionDigits: 1 })} млн ₽`;
+  if (v >= 1_000) return `${neg}${Math.round(v / 1000).toLocaleString("ru-RU")} тыс ₽`;
+  return `${neg}${v} ₽`;
 }
 
 export function pct(n: number, digits = 1): string {
@@ -31,7 +32,9 @@ const MONTHS = [
 export function formatDate(iso?: string): string {
   if (!iso) return "—";
   if (iso.startsWith("9999")) return "бессрочно";
-  const d = new Date(iso);
+  // Дату-только (YYYY-MM-DD) парсим как локальную, чтобы не «уехать» на день назад.
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(iso);
   if (isNaN(d.getTime())) return iso;
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }

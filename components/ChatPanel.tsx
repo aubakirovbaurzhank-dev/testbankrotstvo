@@ -87,15 +87,21 @@ export function ChatPanel({
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let acc = "";
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        acc += dec.decode(value, { stream: true });
+      const update = () =>
         setMessages((m) => {
           const copy = [...m];
           copy[copy.length - 1] = { role: "assistant", content: acc };
           return copy;
         });
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) {
+          acc += dec.decode(); // финальный флаш: не терять последний символ (кириллица = 2 байта)
+          update();
+          break;
+        }
+        acc += dec.decode(value, { stream: true });
+        update();
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Ошибка";

@@ -14,9 +14,9 @@ import { cn } from "@/lib/utils";
 // ── Выплачено: основной долг vs проценты ─────────────────────────
 export function PaidBreakdownCard({ a }: { a: FinanceAnalysis }) {
   const p = a.paid;
-  const total = Math.max(1, p.total_paid);
-  const wInt = Math.round((p.paid_interest / total) * 100);
-  const wPrin = 100 - wInt;
+  const denom = p.paid_principal + p.paid_interest;
+  const wInt = denom > 0 ? Math.min(100, Math.max(0, Math.round((p.paid_interest / denom) * 100))) : 0;
+  const wPrin = denom > 0 ? 100 - wInt : 0;
   return (
     <div className="card p-5">
       <h3 className="text-sm font-semibold text-ink-700">Что клиент уже выплатил</h3>

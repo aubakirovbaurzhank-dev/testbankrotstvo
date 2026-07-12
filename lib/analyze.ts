@@ -113,16 +113,14 @@ export async function extractReport(pdf: Buffer): Promise<ExtractedReport> {
       } catch (e) {
         lastErr = e;
         if (!isTransient(e)) break; // ошибка не транзиентная — к следующей модели
-        await sleep(1500 * (attempt + 1));
+        if (attempt < 2) await sleep(1500 * (attempt + 1)); // без паузы после последней попытки
       }
     }
   }
 
   if (!text) {
     const msg = lastErr instanceof Error ? lastErr.message : "неизвестная ошибка";
-    throw new Error(
-      `Не удалось распознать отчёт (модель перегружена или недоступна). Попробуйте ещё раз. Детали: ${msg}`,
-    );
+    throw new Error(`Не удалось распознать отчёт. Попробуйте ещё раз. Детали: ${msg}`);
   }
 
   let parsed: ExtractedReport;
@@ -140,7 +138,7 @@ export async function extractReport(pdf: Buffer): Promise<ExtractedReport> {
     overdue_debt: num(c.overdue_debt),
     psk_percent: num(c.psk_percent),
     avg_monthly_payment: num(c.avg_monthly_payment),
-    total_paid: c.total_paid != null ? num(c.total_paid) : num(c.total_paid_principal) + num(c.total_paid_interest),
+    total_paid: num(c.total_paid) > 0 ? num(c.total_paid) : num(c.total_paid_principal) + num(c.total_paid_interest),
     total_paid_principal: num(c.total_paid_principal),
     total_paid_interest: num(c.total_paid_interest),
     payments_made: Math.round(num(c.payments_made)),

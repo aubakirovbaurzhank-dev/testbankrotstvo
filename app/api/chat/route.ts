@@ -17,8 +17,13 @@ export async function POST(req: Request) {
     );
   }
 
-  const body = (await req.json()) as { messages: ChatMessage[]; applicationId?: string };
-  const messages = (body.messages || []).filter((m) => m.content?.trim());
+  let body: { messages?: ChatMessage[]; applicationId?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Некорректный запрос." }, { status: 400 });
+  }
+  const messages = (body?.messages || []).filter((m) => m?.content?.trim());
   if (!messages.length) return NextResponse.json({ error: "Пустой запрос." }, { status: 400 });
 
   // Собираем контекст: аналитика воронки + (опц.) конкретная заявка.
@@ -43,15 +48,25 @@ export async function POST(req: Request) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
+      let closed = false;
       try {
         for await (const piece of streamChat(messages, ctx)) {
-          controller.enqueue(encoder.encode(piece));
+          try {
+            controller.enqueue(encoder.encode(piece));
+          } catch {
+            closed = true; // клиент отключился — прекращаем потреблять Gemini
+            break;
+          }
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Ошибка ИИ";
-        controller.enqueue(encoder.encode(`\n\n⚠️ ${msg}`));
+        if (!closed) {
+          try { controller.enqueue(encoder.encode(`\n\n⚠️ ${msg}`)); } catch { /* закрыт */ }
+        }
       } finally {
-        controller.close();
+        if (!closed) {
+          try { controller.close(); } catch { /* уже закрыт */ }
+        }
       }
     },
   });

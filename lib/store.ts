@@ -17,13 +17,27 @@ function ensureDir() {
 function ensureSeeded() {
   ensureDir();
   if (fs.existsSync(SEED_MARK)) return;
-  const empty = fs.readdirSync(DATA_DIR).filter((f) => f.endsWith(".json")).length === 0;
-  if (empty) {
+  const jsons = fs.readdirSync(DATA_DIR).filter((f) => f.endsWith(".json"));
+  // Сеем демо только если нет «настоящих» заявок; идемпотентно дописываем
+  // недостающие файлы (само-восстановление после прерванного сева).
+  const onlyDemoOrEmpty = jsons.every((f) => f.startsWith("demo"));
+  if (onlyDemoOrEmpty) {
     for (const app of buildDemoApplications()) {
-      fs.writeFileSync(fileFor(app.id), JSON.stringify(app, null, 2), "utf-8");
+      const p = fileFor(app.id);
+      if (!fs.existsSync(p)) fs.writeFileSync(p, JSON.stringify(app, null, 2), "utf-8");
     }
   }
   fs.writeFileSync(SEED_MARK, new Date().toISOString(), "utf-8");
+}
+
+/** Проверка, что распарсенный объект — валидная заявка. */
+function isValidApp(x: unknown): x is Application {
+  return (
+    !!x && typeof x === "object" &&
+    typeof (x as Application).id === "string" &&
+    typeof (x as Application).createdAt === "string" &&
+    !!(x as Application).analysis && !!(x as Application).report
+  );
 }
 
 function fileFor(id: string) {
@@ -36,7 +50,8 @@ export function listApplications(): Application[] {
   const apps: Application[] = [];
   for (const f of files) {
     try {
-      apps.push(JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), "utf-8")));
+      const parsed = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), "utf-8"));
+      if (isValidApp(parsed)) apps.push(parsed); // пропускаем битые/неполные файлы
     } catch {
       /* пропускаем битые файлы */
     }
@@ -49,7 +64,8 @@ export function getApplication(id: string): Application | null {
   const p = fileFor(id);
   if (!fs.existsSync(p)) return null;
   try {
-    return JSON.parse(fs.readFileSync(p, "utf-8"));
+    const parsed = JSON.parse(fs.readFileSync(p, "utf-8"));
+    return isValidApp(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -70,7 +86,7 @@ export function deleteApplication(id: string): boolean {
 
 export function newId(): string {
   const ts = Date.now().toString(36);
-  const rnd = Math.random().toString(36).slice(2, 6);
+  const rnd = (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).slice(0, 8);
   return `${ts}${rnd}`;
 }
 

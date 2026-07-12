@@ -22,7 +22,9 @@ function monthsBetween(fromISO: string | undefined, toISO: string | undefined): 
   const a = new Date(fromISO);
   const b = new Date(toISO);
   if (isNaN(a.getTime()) || isNaN(b.getTime())) return null;
-  return Math.max(0, (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()));
+  let m = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+  if (b.getDate() < a.getDate()) m -= 1; // ещё не наступило «число» месяца
+  return Math.max(0, m);
 }
 
 /** Аннуитетный платёж для суммы B под ставку r/мес на n месяцев. */
@@ -35,44 +37,55 @@ function annuityPayment(B: number, rMonthly: number, n: number): number {
 
 /**
  * Прогноз «если продолжать платить банку» по одному договору.
- * Возвращает срок до погашения, ежемесячный платёж и итоговую сумму выплат.
+ * Считаем помесячной амортизацией, поэтому проценты и итог верны даже когда
+ * срок ограничен датой договора или платёж не покрывает проценты (долговая яма).
  */
 function projectContract(c: Contract, now: Date): {
   monthly: number;
   months: number;
   total: number;
   interest: number;
+  amortized: boolean; // гасится ли долг до нуля при текущем платеже
 } {
   const balance = Math.max(0, c.current_debt || 0);
-  if (balance <= 0) return { monthly: 0, months: 0, total: 0, interest: 0 };
+  if (balance <= 0) return { monthly: 0, months: 0, total: 0, interest: 0, amortized: true };
 
-  const rMonthly = Math.max(0, (c.psk_percent || 0) / 100 / 12);
+  const r = Math.max(0, (c.psk_percent || 0) / 100 / 12);
   const termToEnd = monthsBetween(now.toISOString().slice(0, 10), c.end_date);
+  const hardCap = termToEnd && termToEnd > 0 ? Math.min(termToEnd, MAX_TERM_CAP) : MAX_TERM_CAP;
 
   let monthly = c.avg_monthly_payment || 0;
-  let n: number;
 
-  const coversInterest = monthly > balance * rMonthly + 1;
-
-  if (monthly > 0 && coversInterest) {
-    // Классическая амортизация: сколько месяцев до нуля при текущем платеже.
-    if (rMonthly > 0) {
-      n = Math.ceil(-Math.log(1 - (balance * rMonthly) / monthly) / Math.log(1 + rMonthly));
-    } else {
-      n = Math.ceil(balance / monthly);
-    }
-    n = Math.min(n, MAX_TERM_CAP);
-    if (termToEnd && termToEnd > 0) n = Math.min(n, termToEnd);
-  } else {
-    // Нет графика / револьверная линия / платёж не покрывает проценты:
-    // оцениваем через аннуитет на разумный горизонт.
-    n = termToEnd && termToEnd > 0 && termToEnd <= 120 ? termToEnd : DEFAULT_TERM_MONTHS;
-    monthly = annuityPayment(balance, rMonthly, n);
+  // Нет графика / револьверная линия: оцениваем аннуитетом на разумный горизонт.
+  if (monthly <= 0) {
+    const n = termToEnd && termToEnd > 0 && termToEnd <= 120 ? termToEnd : DEFAULT_TERM_MONTHS;
+    monthly = annuityPayment(balance, r, n);
+    const total = monthly * n;
+    return { monthly, months: n, total, interest: Math.max(0, total - balance), amortized: true };
   }
 
-  const total = monthly * n;
-  const interest = Math.max(0, total - balance);
-  return { monthly, months: n, total, interest };
+  // Платёж не покрывает даже проценты — тело не гасится (долговая яма).
+  if (r > 0 && monthly <= balance * r) {
+    const n = termToEnd && termToEnd > 0 ? Math.min(termToEnd, 60) : 60;
+    const total = monthly * n;
+    return { monthly, months: n, total, interest: total, amortized: false }; // почти всё — проценты
+  }
+
+  // Честная помесячная амортизация: суммируем реальные проценты и платежи.
+  let bal = balance;
+  let total = 0;
+  let interest = 0;
+  let months = 0;
+  while (bal > 0.005 && months < hardCap) {
+    const i = bal * r;
+    let pay = monthly;
+    if (pay >= bal + i) pay = bal + i; // финальный (частичный) платёж
+    bal = bal + i - pay;
+    total += pay;
+    interest += i;
+    months++;
+  }
+  return { monthly, months, total, interest, amortized: bal <= 0.005 };
 }
 
 function paidBreakdown(report: ExtractedReport): PaidBreakdown {
@@ -177,12 +190,14 @@ export function analyzeFinance(report: ExtractedReport): FinanceAnalysis {
   let durationMax = 0;
   let continueTotal = 0;
   let continueInterest = 0;
+  let allAmortized = true;
   for (const c of active) {
     const p = projectContract(c, now);
     monthlyTotal += p.monthly;
     durationMax = Math.max(durationMax, p.months);
     continueTotal += p.total;
     continueInterest += p.interest;
+    if (!p.amortized) allAmortized = false;
   }
 
   const continueScenario: Scenario = {
@@ -195,9 +210,10 @@ export function analyzeFinance(report: ExtractedReport): FinanceAnalysis {
     interest_pay: continueInterest,
     savings_vs_continue: 0,
     note:
-      continueInterest > 0
+      (continueInterest > 0
         ? `Клиент отдаст банкам ещё ${Math.round(continueTotal).toLocaleString("ru-RU")} ₽, из них ${Math.round(continueInterest).toLocaleString("ru-RU")} ₽ — только проценты.`
-        : "Текущий график без изменений.",
+        : "Текущий график без изменений.") +
+      (allAmortized ? "" : " ⚠ Текущего платежа не хватает — часть долга не гасится."),
   };
 
   // Сценарий B — банкротство физлица (БФЛ).
