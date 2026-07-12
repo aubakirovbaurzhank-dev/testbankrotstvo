@@ -16,6 +16,7 @@ function ensureDir() {
 /** При первом запуске наполняем хранилище демо-заявками (обезличенными). */
 function ensureSeeded() {
   ensureDir();
+  if (process.env.SEED_DEMO === "false") return; // демо-заявки отключены
   if (fs.existsSync(SEED_MARK)) return;
   const jsons = fs.readdirSync(DATA_DIR).filter((f) => f.endsWith(".json"));
   // Сеем демо только если нет «настоящих» заявок; идемпотентно дописываем
