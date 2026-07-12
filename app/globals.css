@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: theme("colors.ink.800");
+  background:
+    radial-gradient(1200px 600px at 100% -10%, rgba(99, 102, 241, 0.10), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, rgba(20, 184, 166, 0.08), transparent 55%),
+    theme("colors.ink.50");
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Тонкий скроллбар */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: theme("colors.ink.300") transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: theme("colors.ink.300");
+  border-radius: 999px;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl bg-white border border-ink-200/70 shadow-soft;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold
+           transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/60
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-brand-600 text-white hover:bg-brand-700 shadow-soft;
+  }
+  .btn-ghost {
+    @apply btn bg-white text-ink-700 border border-ink-200 hover:bg-ink-50;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium;
+  }
+  .stat-label {
+    @apply text-xs font-medium uppercase tracking-wide text-ink-400;
+  }
+}
+
+/* Markdown-ответы ассистента */
+.prose-chat p { margin: 0 0 0.5rem; }
+.prose-chat ul { margin: 0.25rem 0 0.5rem; padding-left: 1.1rem; list-style: disc; }
+.prose-chat ol { margin: 0.25rem 0 0.5rem; padding-left: 1.1rem; list-style: decimal; }
+.prose-chat li { margin: 0.15rem 0; }
+.prose-chat strong { font-weight: 700; color: theme("colors.ink.900"); }
+.prose-chat code { background: theme("colors.ink.100"); padding: 0 0.25rem; border-radius: 4px; font-size: 0.85em; }
